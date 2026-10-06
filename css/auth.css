@@ -857,10 +857,23 @@ html.dark .auth-status-icon-box.check,
   color: var(--muted);
 }
 
-.save-status-badge.error {
+.save-status-badge.error,
+.save-status-badge.failed {
   border-color: rgba(239, 68, 68, 0.35);
   background: rgba(239, 68, 68, 0.08);
   color: var(--warn);
+}
+
+.save-status-badge.retry-pending {
+  border-color: rgba(245, 158, 11, 0.35);
+  background: rgba(245, 158, 11, 0.08);
+  color: #d97706;
+}
+
+.save-status-badge.auth-required {
+  border-color: var(--line);
+  background: var(--panel);
+  color: var(--muted);
 }
 
 .save-status-dot {
@@ -892,6 +905,11 @@ html.dark .auth-status-icon-box.check,
 
 .dot-error {
   background-color: #ef4444;
+}
+
+.dot-retry-pending {
+  background-color: #f59e0b;
+  animation: pulse-dot 1.5s infinite ease-in-out;
 }
 
 @keyframes pulse-dot {

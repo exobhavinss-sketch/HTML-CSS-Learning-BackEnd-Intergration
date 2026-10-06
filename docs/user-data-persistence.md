@@ -175,10 +175,21 @@ When a user clicks **Sign Out**:
 
 ## 7. Offline & Network Interruption Handling
 
-1. When offline (`navigator.onLine === false` or API failure):
-   - Changes are queued locally in `tagfinder_pending_sync_v1`.
-   - The status indicator displays `Offline (cached)`.
-2. When connection is restored (`window.addEventListener('online')`):
-   - Status updates to `Syncing...`.
-   - All queued pending records are sent to Supabase via bulk upsert.
-   - Queue is emptied upon successful response, and status returns to `● Saved`.
+1. **User Isolation**:
+   - Pending offline/retry changes are strictly partitioned per authenticated user ID:
+     `pendingSync:${userId}`
+   - One user cannot access, sync, or overwrite another user's pending retry queue.
+
+2. **Error Classification & Loop Prevention**:
+   - **Retryable Errors**: Genuine network drops (`Failed to fetch`, timeouts) or 5xx server errors trigger exponential backoff retries.
+   - **Non-Retryable Errors**: Missing schema (`PGRST205`), RLS violations (`42501`), or malformed 4xx requests are classified as permanent, halting infinite retry loops and displaying an actionable developer notification.
+
+3. **Exponential Backoff**:
+   - Transient retries back off exponentially: 1s, 2s, 4s, 8s, 16s, up to a maximum of 30s (max 5 automatic attempts).
+
+4. **Network Reconnection**:
+   - When connection is restored (`window.addEventListener('online')`):
+     - Status updates to `Syncing...`.
+     - Validated pending records for the current user are upserted to Supabase.
+     - Upon completion, the badge cleanly returns to `● Saved`.
+

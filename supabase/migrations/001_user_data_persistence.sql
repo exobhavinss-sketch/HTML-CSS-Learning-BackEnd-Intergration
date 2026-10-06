@@ -256,3 +256,15 @@ DROP POLICY IF EXISTS "Users can delete own preferences" ON public.user_preferen
 CREATE POLICY "Users can delete own preferences"
   ON public.user_preferences FOR DELETE
   USING (auth.uid() = user_id);
+
+-- ============================================================================
+-- 9. AUTHENTICATED ROLE GRANTS
+-- Explicitly grant table permissions to the authenticated role.
+-- RLS policies govern row-level access for every query.
+-- ============================================================================
+GRANT USAGE ON SCHEMA public TO authenticated;
+GRANT ALL ON TABLE public.profiles TO authenticated;
+GRANT ALL ON TABLE public.practice_progress TO authenticated;
+GRANT ALL ON TABLE public.workbench_progress TO authenticated;
+GRANT ALL ON TABLE public.user_preferences TO authenticated;
+
