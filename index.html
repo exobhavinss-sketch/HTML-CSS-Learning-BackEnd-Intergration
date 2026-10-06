@@ -8,6 +8,14 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=Recursive:wght,CASL,MONO@300..900,0..1,0..1&display=swap">
+<link rel="stylesheet" href="css/auth.css">
+<script type="importmap">
+{
+  "imports": {
+    "@supabase/supabase-js": "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm"
+  }
+}
+</script>
 <style>
 /* Layout: topic index on the left like a lab manual's contents; right side is a 4-step workbench (tag → HTML → CSS → result) with a browser-window preview. */
 :root{
@@ -208,7 +216,10 @@ iframe.pv{display:block;width:100%;height:220px;border:0;background:#fff}
   <h1 class="brand"><span class="bracket">&lt;/&gt;</span> Tag Finder</h1>
   <p>Pick what you want to build. See which tag to use, add CSS one line at a time, and watch the page change.</p>
 
-  <button class="sidetoggle" id="sidetoggle" aria-controls="side" aria-expanded="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16"/></svg><span>Hide topics</span></button>
+  <div class="topbar-actions">
+    <div id="auth-root" class="auth-root"></div>
+    <button class="sidetoggle" id="sidetoggle" aria-controls="side" aria-expanded="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16"/></svg><span>Hide topics</span></button>
+  </div>
 </header>
 
 <div class="app">
@@ -2312,5 +2323,6 @@ open(byId(start)||['xray','practice'].includes(start)?start:'navbar',false);
 })();
 </script>
 
+<script type="module" src="js/auth-ui.js"></script>
 </body>
 </html>
