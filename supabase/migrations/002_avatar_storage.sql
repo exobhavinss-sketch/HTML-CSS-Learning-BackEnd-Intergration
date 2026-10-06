@@ -19,10 +19,11 @@ ON CONFLICT (id) DO UPDATE SET
   file_size_limit = 5242880,
   allowed_mime_types = ARRAY['image/jpeg', 'image/png', 'image/webp']::text[];
 
--- 2. Ensure RLS is enabled on storage.objects
-ALTER TABLE storage.objects ENABLE ROW LEVEL SECURITY;
+-- NOTE: RLS is already enabled on storage.objects by Supabase by default.
+-- Do NOT run ALTER TABLE storage.objects ENABLE ROW LEVEL SECURITY as it requires
+-- the supabase_storage_admin owner role and will error in the SQL editor.
 
--- 3. Storage Policies for 'avatars' Bucket
+-- 2. Storage Policies for 'avatars' Bucket
 
 -- A. PUBLIC SELECT POLICY
 -- Anyone can view avatar images (required for public profile pictures)
@@ -52,10 +53,6 @@ CREATE POLICY "Users can update their own avatar"
   USING (
     bucket_id = 'avatars'
     AND (storage.foldername(name))[1] = auth.uid()::text
-  )
-  WITH CHECK (
-    bucket_id = 'avatars'
-    AND (storage.foldername(name))[1] = auth.uid()::text
   );
 
 -- D. AUTHENTICATED DELETE POLICY
@@ -69,7 +66,7 @@ CREATE POLICY "Users can delete their own avatar"
     AND (storage.foldername(name))[1] = auth.uid()::text
   );
 
--- 4. Verify public.profiles table has avatar_url column (from migration 001)
+-- 3. Verify public.profiles table has avatar_url column (from migration 001)
 DO $$
 BEGIN
   IF NOT EXISTS (
