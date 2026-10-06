@@ -230,6 +230,7 @@ iframe.pv{display:block;width:100%;height:220px;border:0;background:#fff}
   <p>Pick what you want to build. See which tag to use, add CSS one line at a time, and watch the page change.</p>
 
   <div class="topbar-actions">
+    <div id="save-status-root" class="save-status-root"></div>
     <div id="theme-root" class="theme-root"></div>
     <div id="auth-root" class="auth-root"></div>
     <button class="sidetoggle" id="sidetoggle" aria-controls="side" aria-expanded="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16"/></svg><span>Hide topics</span></button>
@@ -2035,6 +2036,7 @@ function open(id,fromClick,isAuthRedirect){
   if(id==='xray'){openXray(fromClick);return;}
   if(id==='practice'){openPractice(fromClick);return;}
   const item=byId(id)||byId('navbar');state.id=item.id;
+  if(window.userDataService&&!isAuthRedirect){try{window.userDataService.saveUserPreferences({last_topic_id:item.id,device_view:state.device,example_view:state.view});}catch(e){}}
   if(!isAuthRedirect){try{history.replaceState(null,'','#'+item.id);}catch(e){}}
   const g=GROUPS.find(x=>x.id===item.g);
   const idx=ITEMS.indexOf(item);const prev=ITEMS[idx-1],next=ITEMS[idx+1];
@@ -2104,14 +2106,14 @@ function updateCSSView(item){
 
 function bind(item){
   const ed=$('#html-editor');let t;
-  ed.addEventListener('input',()=>{state.html[item.id]=ed.value;clearTimeout(t);t=setTimeout(()=>loadPreview(item),250);});
+  ed.addEventListener('input',()=>{state.html[item.id]=ed.value;clearTimeout(t);t=setTimeout(()=>loadPreview(item),250);if(window.userDataService)window.userDataService.saveWorkbenchTopic({topicId:item.id,html:ed.value},false);});
   ed.addEventListener('keydown',e=>{if(e.key==='Tab'&&!e.shiftKey){e.preventDefault();const s=ed.selectionStart;ed.setRangeText('  ',s,ed.selectionEnd,'end');ed.dispatchEvent(new Event('input'));}});
-  $('#reset-html').onclick=()=>{delete state.html[item.id];ed.value=item.html;loadPreview(item);toast('HTML reset to the example');};
+  $('#reset-html').onclick=()=>{delete state.html[item.id];ed.value=item.html;loadPreview(item);toast('HTML reset to the example');if(window.userDataService)window.userDataService.saveWorkbenchTopic({topicId:item.id,html:item.html},true);};
   $('#copy-html').onclick=()=>copy(ed.value,ed,'HTML copied');
-  document.querySelectorAll('[data-dev]').forEach(b=>b.onclick=()=>{state.device=b.dataset.dev;document.querySelectorAll('[data-dev]').forEach(x=>x.setAttribute('aria-pressed',x===b));$('#stage').classList.toggle('phone',state.device==='phone');setTimeout(()=>fitFrame(),50);});
+  document.querySelectorAll('[data-dev]').forEach(b=>b.onclick=()=>{state.device=b.dataset.dev;document.querySelectorAll('[data-dev]').forEach(x=>x.setAttribute('aria-pressed',x===b));$('#stage').classList.toggle('phone',state.device==='phone');setTimeout(()=>fitFrame(),50);if(window.userDataService)window.userDataService.saveUserPreferences({device_view:state.device});});
   document.querySelectorAll('[data-go]').forEach(b=>b.onclick=()=>open(b.dataset.go,true));
   document.querySelectorAll('[data-practice]').forEach(b=>b.onclick=()=>{const [k,i]=b.dataset.practice.split('|');state.pset=k;state.pidx=+i;state.pmsg=null;open('practice',true);});
-  document.querySelectorAll('[data-view]').forEach(b=>b.onclick=()=>{state.view=b.dataset.view;open(item.id,false);});
+  document.querySelectorAll('[data-view]').forEach(b=>b.onclick=()=>{state.view=b.dataset.view;if(window.userDataService)window.userDataService.saveUserPreferences({example_view:state.view});open(item.id,false);});
   if(!item.css.length)return;
   const on=onList(item);
   $('#cssrows').addEventListener('change',e=>{const i=+e.target.dataset.i;
@@ -2123,7 +2125,7 @@ function bind(item){
   $('#css-none').onclick=()=>{on.fill(false);changed(item);};
   $('#copy-css').onclick=()=>copy(buildCSS(item).plain,$('#fullcss'),'CSS copied');
 }
-function changed(item){updateCSSView(item);applyCSS(item);}
+function changed(item){updateCSSView(item);applyCSS(item);if(window.userDataService)window.userDataService.saveWorkbenchTopic({topicId:item.id,cssToggles:onList(item),cssValues:valList(item)},true);}
 
 /* ---------- preview ---------- */
 function loadPreview(item){
@@ -2281,23 +2283,23 @@ function openPractice(fromClick){
   const ed=$('#p-editor');let t;
   const load=(id,sol)=>{const f=$(id);f.onload=()=>hook(f);f.srcdoc=pDocs(ch,ed.value,sol);};
   load('#p-goal',true);load('#p-res',false);
-  ed.addEventListener('input',()=>{PS.work[ch.id]=ed.value;clearTimeout(t);t=setTimeout(()=>{psSave();load('#p-res',false);},300);});
+  ed.addEventListener('input',()=>{PS.work[ch.id]=ed.value;clearTimeout(t);t=setTimeout(()=>{psSave();load('#p-res',false);},300);if(window.userDataService)window.userDataService.savePracticeChallenge({challengeId:ch.id,setKey:set.key,code:ed.value},false);});
   ed.addEventListener('keydown',e=>{if(e.key==='Tab'&&!e.shiftKey){e.preventDefault();ed.setRangeText('  ',ed.selectionStart,ed.selectionEnd,'end');ed.dispatchEvent(new Event('input'));}});
-  $('#p-name').oninput=e=>{PS.name=e.target.value;psSave();};
-  $('#p-roll').oninput=e=>{PS.roll=e.target.value;psSave();};
-  document.querySelectorAll('[data-set]').forEach(b=>b.onclick=()=>{state.pset=b.dataset.set;state.pidx=0;state.pmsg=null;openPractice();});
-  document.querySelectorAll('[data-ch]').forEach(b=>b.onclick=()=>{state.pidx=+b.dataset.ch;state.pmsg=null;openPractice();});
+  $('#p-name').oninput=e=>{PS.name=e.target.value;psSave();if(window.userDataService)window.userDataService.saveProfile({fullName:e.target.value},false);};
+  $('#p-roll').oninput=e=>{PS.roll=e.target.value;psSave();if(window.userDataService)window.userDataService.saveProfile({rollNumber:e.target.value},false);};
+  document.querySelectorAll('[data-set]').forEach(b=>b.onclick=()=>{state.pset=b.dataset.set;state.pidx=0;state.pmsg=null;if(window.userDataService)window.userDataService.saveUserPreferences({last_practice_set:state.pset,last_practice_idx:0});openPractice();});
+  document.querySelectorAll('[data-ch]').forEach(b=>b.onclick=()=>{state.pidx=+b.dataset.ch;state.pmsg=null;if(window.userDataService)window.userDataService.saveUserPreferences({last_practice_set:state.pset,last_practice_idx:state.pidx});openPractice();});
   document.querySelectorAll('[data-go]').forEach(b=>b.onclick=()=>open(b.dataset.go,true));
-  document.querySelectorAll('[data-dev]').forEach(b=>b.onclick=()=>{state.device=b.dataset.dev;document.querySelectorAll('[data-dev]').forEach(x=>x.setAttribute('aria-pressed',x===b));document.querySelectorAll('.stage').forEach(s=>s.classList.toggle('phone',state.device==='phone'));});
+  document.querySelectorAll('[data-dev]').forEach(b=>b.onclick=()=>{state.device=b.dataset.dev;document.querySelectorAll('[data-dev]').forEach(x=>x.setAttribute('aria-pressed',x===b));document.querySelectorAll('.stage').forEach(s=>s.classList.toggle('phone',state.device==='phone'));if(window.userDataService)window.userDataService.saveUserPreferences({device_view:state.device});});
   $('#p-hint').onclick=()=>{$('#p-hinttext').hidden=!$('#p-hinttext').hidden;};
-  $('#p-reset').onclick=()=>{delete PS.work[ch.id];psSave();ed.value=ch.mode==='html'?HTML_START:CSS_START;load('#p-res',false);};
-  if($('#p-next'))$('#p-next').onclick=()=>{state.pidx++;state.pmsg=null;openPractice();};
+  $('#p-reset').onclick=()=>{delete PS.work[ch.id];psSave();if(window.userDataService)window.userDataService.savePracticeChallenge({challengeId:ch.id,setKey:set.key,code:''},true);ed.value=ch.mode==='html'?HTML_START:CSS_START;load('#p-res',false);};
+  if($('#p-next'))$('#p-next').onclick=()=>{state.pidx++;state.pmsg=null;if(window.userDataService)window.userDataService.saveUserPreferences({last_practice_set:state.pset,last_practice_idx:state.pidx});openPractice();};
   $('#p-check').onclick=()=>{
     PS.work[ch.id]=ed.value;psSave();
     const run=d=>{let res;try{res=ch.checks(mkHelpers(d));}catch(e){res=[[false,'Something in your code could not be checked. Look for a typo.']];}
       const fail=res.find(x=>!x[0]);
       if(fail){state.pmsg={id:ch.id,ok:false,text:fail[1]};const fb=$('#p-fb');fb.className='fb bad';fb.textContent='✗ '+fail[1];}
-      else{PS.solved[ch.id]=true;psSave();state.pmsg={id:ch.id,ok:true,text:'Correct! Well done.'};openPractice();}};
+      else{PS.solved[ch.id]=true;psSave();if(window.userDataService)window.userDataService.savePracticeChallenge({challengeId:ch.id,setKey:set.key,solved:true,code:ed.value},true);state.pmsg={id:ch.id,ok:true,text:'Correct! Well done.'};openPractice();}};
     if(ch.mode==='html'){run(new DOMParser().parseFromString(ed.value,'text/html'));}
     else{const f=$('#p-res');f.onload=()=>{hook(f);setTimeout(()=>run(f.contentDocument),60);};f.srcdoc=pDocs(ch,ed.value,false);}
   };
@@ -2322,6 +2324,65 @@ function copy(text,el,msg){
 }
 window.addEventListener('resize',()=>fitFrame());
 
+/* ---------- State Restoration and Reset ---------- */
+window.restoreUserDataFromService=function(data){
+  if(!data)return;
+  if(data.profile){
+    if(data.profile.full_name)PS.name=data.profile.full_name;
+    if(data.profile.roll_number)PS.roll=data.profile.roll_number;
+    const ne=$('#p-name');if(ne&&data.profile.full_name)ne.value=data.profile.full_name;
+    const re=$('#p-roll');if(re&&data.profile.roll_number)re.value=data.profile.roll_number;
+  }
+  if(data.practice&&typeof data.practice==='object'){
+    Object.keys(data.practice).forEach(id=>{
+      const p=data.practice[id];
+      if(p.solved)PS.solved[id]=true;
+      if(p.code!==undefined&&p.code!=='')PS.work[id]=p.code;
+    });
+    psSave();
+  }
+  if(data.workbench&&typeof data.workbench==='object'){
+    Object.keys(data.workbench).forEach(tid=>{
+      const w=data.workbench[tid];
+      if(w.html_content)state.html[tid]=w.html_content;
+      if(Array.isArray(w.css_toggles))state.on[tid]=w.css_toggles;
+      if(w.css_values&&typeof w.css_values==='object')state.val[tid]=w.css_values;
+    });
+  }
+  if(data.preferences){
+    const pr=data.preferences;
+    if(pr.theme&&(pr.theme==='dark'||pr.theme==='light')&&typeof window.setTheme==='function'){
+      window.setTheme(pr.theme,false);
+    }
+    if(pr.hide_topics!==undefined){
+      const app=$('.app'),sb=$('#sidetoggle');
+      if(app&&sb){
+        const h=Boolean(pr.hide_topics);
+        app.classList.toggle('noside',h);
+        sb.setAttribute('aria-expanded',String(!h));
+        const sp=sb.querySelector('span');if(sp)sp.textContent=h?'Show topics':'Hide topics';
+      }
+    }
+    if(pr.device_view)state.device=pr.device_view;
+    if(pr.example_view)state.view=pr.example_view;
+    if(pr.last_practice_set)state.pset=pr.last_practice_set;
+    if(Number.isInteger(pr.last_practice_idx))state.pidx=pr.last_practice_idx;
+  }
+  if(state.id==='practice')openPractice(false);
+  else if(state.id==='xray')openXray(false);
+  else if(state.id)open(state.id,false);
+};
+
+window.resetToLoggedOutState=function(){
+  PS.name='';PS.roll='';PS.solved={};PS.work={};psSave();
+  state.html={};state.on={};state.val={};
+  const ne=$('#p-name');if(ne)ne.value='';
+  const re=$('#p-roll');if(re)re.value='';
+  if(state.id==='practice')openPractice(false);
+  else if(state.id==='xray')openXray(false);
+  else if(state.id)open(state.id||'navbar',false);
+};
+
 /* ---------- start ---------- */
 const rawHash=(location.hash||'').slice(1);
 const isAuthHash=rawHash.startsWith('access_token=')||rawHash.includes('&access_token=')||rawHash.includes('type=recovery')||rawHash.includes('type=signup')||rawHash.startsWith('error=')||rawHash.startsWith('error_description=')||rawHash.startsWith('refresh_token=');
@@ -2336,13 +2397,16 @@ open(byId(start)||['xray','practice'].includes(start)?start:'navbar',false,isAut
 (function(){
   const KEY='hide-topics';const app=document.querySelector('.app'),b=document.getElementById('sidetoggle');
   const set=h=>{app.classList.toggle('noside',h);b.setAttribute('aria-expanded',String(!h));b.querySelector('span').textContent=h?'Show topics':'Hide topics';
-    try{localStorage.setItem(KEY,h?'1':'0');}catch(e){}window.dispatchEvent(new Event('resize'));};
+    try{localStorage.setItem(KEY,h?'1':'0');}catch(e){}
+    if(window.userDataService)window.userDataService.saveUserPreferences({hide_topics:h});
+    window.dispatchEvent(new Event('resize'));};
   let h=false;try{h=localStorage.getItem(KEY)==='1';}catch(e){}
   set(h);b.addEventListener('click',()=>set(!app.classList.contains('noside')));
 })();
 </script>
 
 <script type="module" src="js/theme.js"></script>
+<script type="module" src="js/userDataService.js"></script>
 <script type="module" src="js/auth-ui.js"></script>
 </body>
 </html>

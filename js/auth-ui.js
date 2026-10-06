@@ -15,6 +15,7 @@ import {
   formatUserProfile,
   getFriendlyErrorMessage
 } from './auth.js';
+import { userDataService } from './userDataService.js';
 
 // SVG Icons
 const CHEVRON_DOWN_SVG = `
@@ -128,7 +129,8 @@ class AuthUI {
     document.addEventListener('keydown', this.handleKeyDown);
 
     // Subscribe to auth state changes
-    subscribeToAuthChanges((event, session) => {
+    subscribeToAuthChanges(async (event, session) => {
+      const prevUser = this.currentUser;
       this.currentUser = session?.user || null;
       this.isLoading = false;
       this.isLoggingOut = false;
@@ -143,6 +145,11 @@ class AuthUI {
           this.closeModal();
         }
         this.syncUserProfileWithPractice();
+        if (!prevUser || prevUser.id !== this.currentUser.id || event === 'SIGNED_IN') {
+          await userDataService.handleUserSignIn(this.currentUser);
+        }
+      } else if (event === 'SIGNED_OUT') {
+        await userDataService.handleUserSignOut();
       }
 
       this.render();
@@ -171,6 +178,7 @@ class AuthUI {
     this.currentUser = session?.user || null;
     if (this.currentUser) {
       this.syncUserProfileWithPractice();
+      await userDataService.handleUserSignIn(this.currentUser);
     }
     this.render();
   }
@@ -901,6 +909,9 @@ class AuthUI {
 
     this.currentUser = data?.user || null;
     this.syncUserProfileWithPractice();
+    if (this.currentUser) {
+      await userDataService.handleUserSignIn(this.currentUser);
+    }
     this.closeModal();
     this.render();
   }
@@ -965,6 +976,9 @@ class AuthUI {
       // Auto-confirmed by Supabase project configuration
       this.currentUser = data.user;
       this.syncUserProfileWithPractice();
+      if (this.currentUser) {
+        await userDataService.handleUserSignIn(this.currentUser);
+      }
       this.closeModal();
       this.render();
     } else {
@@ -1079,6 +1093,9 @@ class AuthUI {
     this.isLoggingOut = true;
     this.renderLoggedIn();
 
+    // Flush pending changes before signout
+    await userDataService.flushAllPending();
+
     const { error } = await signOut();
     this.isLoggingOut = false;
     this.isDropdownOpen = false;
@@ -1086,6 +1103,9 @@ class AuthUI {
     if (error) {
       console.error('[AuthUI] Sign out error:', error.message);
     }
+
+    // Cleanly clear memory and update app state
+    await userDataService.handleUserSignOut();
 
     this.currentUser = null;
     this.render();

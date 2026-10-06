@@ -153,6 +153,12 @@ export function initTheme(rootSelector = '#theme-root') {
 }
 
 // Auto-initialize in browser environment
+if (typeof window !== 'undefined') {
+  window.setTheme = setTheme;
+  window.getTheme = getTheme;
+  window.toggleTheme = toggleTheme;
+}
+
 if (typeof document !== 'undefined') {
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', () => initTheme());
@@ -160,3 +166,4 @@ if (typeof document !== 'undefined') {
     initTheme();
   }
 }
+

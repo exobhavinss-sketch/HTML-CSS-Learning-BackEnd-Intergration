@@ -61,6 +61,15 @@ The project features a **complete, production-ready Supabase Email + Password Au
 - **User Profile Menu**: Dropdown displaying avatar initials, full name, email, and one-click Sign Out.
 - **Automatic Name Sync**: Logged-in learner names automatically populate the Practice Arena (`PS.name`) for seamless assignment tracking.
 
+### 💾 6. Persistent Cloud User Data & Learning Progress
+- **Supabase PostgreSQL as Source of Truth**: All student work (solved challenges, custom code solutions, workbench HTML edits, CSS line toggles, roll numbers, and preferences) is saved directly to Supabase PostgreSQL.
+- **Cross-Device Persistence**: When a student logs out and logs back in with the same account days later or from a different computer, **all** of their work and learning progress is automatically restored.
+- **Safe Logout**: Logging out terminates the session; it **never** deletes records from the database.
+- **Automatic Debounced Saving**: Edits to the code and HTML editors are debounced (600–800ms) to prevent unnecessary network requests while ensuring work is never lost.
+- **Subtle Save Status Badge**: Real-time topbar indicator displaying `● Saved`, `Saving...`, `Offline (cached)`, and `Syncing...`.
+- **Row Level Security (RLS)**: Strict database-level isolation guarantees that students can only ever view and edit their own data (`auth.uid() = user_id`).
+- **Offline Resilience Queue**: Changes made during brief disconnections are cached locally and synchronized automatically once the network returns.
+
 ---
 
 ## 📁 Project Structure
@@ -68,13 +77,19 @@ The project features a **complete, production-ready Supabase Email + Password Au
 ```text
 HTML CSS Learning/
 ├── css/
-│   ├── auth.css          # Authentication modal, forms, alerts, and user menu styles
+│   ├── auth.css          # Authentication modal, forms, alerts, and save status badge styles
 │   └── theme.css         # Light and Dark theme design tokens and surface transitions
+├── docs/
+│   └── user-data-persistence.md # Detailed database schema, RLS policies, and data flow documentation
 ├── js/
 │   ├── auth.js           # Supabase Auth client methods (signup, signin, reset, session)
 │   ├── auth-ui.js        # Authentication UI controller, modal states, validation, profile menu
 │   ├── supabase.js       # Centralized Supabase client initialization
-│   └── theme.js          # Dark/Light mode theme state management & toggle listener
+│   ├── theme.js          # Dark/Light mode theme state management & toggle listener
+│   └── userDataService.js# Cloud persistence service, debouncing, offline queue & restore flow
+├── supabase/
+│   └── migrations/
+│       └── 001_user_data_persistence.sql # Safe, repeatable SQL migration for tables & RLS
 ├── index.html            # Main single-page application (topics, editors, X-Ray, practice)
 ├── package.json          # Project scripts and dependencies
 ├── .gitignore            # Git ignore specifications
@@ -141,6 +156,16 @@ To support email verification and password reset redirects for production (e.g. 
    https://<username>.github.io/<repository-name>/**
    ```
 5. Navigate to **Authentication** → **Email Templates** to customize confirmation and recovery email content if desired.
+
+### Running the Database Migration
+
+To enable persistent cloud storage for user progress:
+
+1. In your **[Supabase Dashboard](https://supabase.com/dashboard)**, go to the **SQL Editor**.
+2. Click **New query**.
+3. Copy and paste the contents of [`supabase/migrations/001_user_data_persistence.sql`](file:///f:/MIT%20VishwaPrayag%20University/3%20-%20Semester/Full%20Stack%20Development%20JS%20Intergration%20And%20Backend/HTML%20CSS%20Learning/supabase/migrations/001_user_data_persistence.sql).
+4. Click **Run**.
+5. All four tables (`profiles`, `practice_progress`, `workbench_progress`, `user_preferences`) will be created with Row Level Security (RLS) policies and performance indexes enabled.
 
 ---
 
