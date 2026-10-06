@@ -16,8 +16,20 @@ import {
   getFriendlyErrorMessage
 } from './auth.js';
 import { userDataService } from './userDataService.js';
+import { uploadAvatar, removeAvatar, validateImageFile } from './profileService.js';
 
 // SVG Icons
+const CAMERA_ICON_SVG = `
+<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+  <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
+  <circle cx="12" cy="13" r="4"/>
+</svg>`;
+
+const TRASH_ICON_SVG = `
+<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+  <polyline points="3 6 5 6 21 6"/>
+  <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+</svg>`;
 const CHEVRON_DOWN_SVG = `
 <svg class="auth-chevron" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
   <path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clip-rule="evenodd" />
@@ -103,6 +115,11 @@ class AuthUI {
     this.generalError = null;
     this.generalSuccess = null;
     this.fieldErrors = {};
+
+    // Avatar state
+    this.isUploadingAvatar = false;
+    this.avatarError = null;
+    this.avatarSuccess = null;
 
     // Temp state
     this.pendingEmail = '';
@@ -254,17 +271,19 @@ class AuthUI {
   }
 
   renderLoggedIn() {
-    const profile = formatUserProfile(this.currentUser);
+    const profileRecord = userDataService.cachedData?.profile;
+    const profile = formatUserProfile(this.currentUser, profileRecord);
     const escapedName = escapeHtml(profile.name);
     const escapedEmail = escapeHtml(profile.email);
 
+    // Dynamic alt text and fallback onerror handlers
     const avatarMiniHtml = profile.avatar
-      ? `<img src="${escapeHtml(profile.avatar)}" alt="${escapedName}" class="auth-avatar-mini" referrerpolicy="no-referrer">`
-      : `<span class="auth-avatar-mini">${escapeHtml(profile.initials)}</span>`;
+      ? `<img src="${escapeHtml(profile.avatar)}" alt="${escapedName} profile picture" class="auth-avatar-mini" referrerpolicy="no-referrer" onerror="this.onerror=null;this.replaceWith(Object.assign(document.createElement('span'),{className:'auth-avatar-mini',textContent:'${escapeHtml(profile.initials)}'}))">`
+      : `<span class="auth-avatar-mini" aria-hidden="true">${escapeHtml(profile.initials)}</span>`;
 
     const avatarLargeHtml = profile.avatar
-      ? `<img src="${escapeHtml(profile.avatar)}" alt="${escapedName}" class="auth-avatar-large" referrerpolicy="no-referrer">`
-      : `<span class="auth-avatar-large">${escapeHtml(profile.initials)}</span>`;
+      ? `<img src="${escapeHtml(profile.avatar)}" alt="${escapedName} profile picture" class="auth-avatar-large" referrerpolicy="no-referrer" onerror="this.onerror=null;this.replaceWith(Object.assign(document.createElement('span'),{className:'auth-avatar-large',textContent:'${escapeHtml(profile.initials)}'}))">`
+      : `<span class="auth-avatar-large" aria-hidden="true">${escapeHtml(profile.initials)}</span>`;
 
     this.root.innerHTML = `
       <button type="button" class="auth-user-btn" id="auth-user-btn" aria-expanded="${this.isDropdownOpen}" aria-haspopup="menu" aria-label="Account menu for ${escapedName}">
@@ -282,6 +301,33 @@ class AuthUI {
               <p class="auth-dropdown-email" title="${escapedEmail}">${escapedEmail}</p>
             </div>
           </div>
+
+          <div class="auth-dropdown-avatar-actions">
+            <input type="file" id="auth-avatar-file-input" class="auth-avatar-file-input" accept="image/jpeg,image/png,image/webp" style="display:none" aria-label="Upload profile picture">
+            <button type="button" class="auth-dropdown-avatar-btn" id="auth-change-photo-btn" aria-label="Change profile picture" ${this.isUploadingAvatar ? 'disabled' : ''}>
+              ${this.isUploadingAvatar
+                ? `<span class="auth-spinner-sm" aria-hidden="true"></span><span>Uploading...</span>`
+                : `${CAMERA_ICON_SVG}<span>${profile.avatar ? 'Change photo' : 'Upload photo'}</span>`}
+            </button>
+            ${profile.avatar && !this.isUploadingAvatar ? `
+              <button type="button" class="auth-dropdown-remove-photo-btn" id="auth-remove-photo-btn" aria-label="Remove profile picture">
+                ${TRASH_ICON_SVG}<span>Remove</span>
+              </button>
+            ` : ''}
+          </div>
+
+          ${this.avatarError ? `
+            <div class="auth-avatar-msg error" role="alert">
+              <span>⚠️ ${escapeHtml(this.avatarError)}</span>
+            </div>
+          ` : ''}
+
+          ${this.avatarSuccess ? `
+            <div class="auth-avatar-msg success" role="status">
+              <span>✓ ${escapeHtml(this.avatarSuccess)}</span>
+            </div>
+          ` : ''}
+
           <div class="auth-dropdown-divider" role="separator"></div>
           <button type="button" class="auth-dropdown-logout-btn" id="auth-logout-btn" role="menuitem" ${this.isLoggingOut ? 'disabled' : ''}>
             ${this.isLoggingOut ? `<span class="auth-spinner-sm" aria-hidden="true"></span><span>Logging out...</span>` : `${LOGOUT_ICON_SVG}<span>Sign Out</span>`}
@@ -298,12 +344,109 @@ class AuthUI {
       });
     }
 
+    const changePhotoBtn = this.root.querySelector('#auth-change-photo-btn');
+    const fileInput = this.root.querySelector('#auth-avatar-file-input');
+    if (changePhotoBtn && fileInput) {
+      changePhotoBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (this.isUploadingAvatar) return;
+        this.avatarError = null;
+        fileInput.click();
+      });
+
+      fileInput.addEventListener('change', async (e) => {
+        const file = e.target.files?.[0];
+        if (file) {
+          await this.handleAvatarUpload(file);
+        }
+        fileInput.value = '';
+      });
+    }
+
+    const removePhotoBtn = this.root.querySelector('#auth-remove-photo-btn');
+    if (removePhotoBtn) {
+      removePhotoBtn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        await this.handleAvatarRemove();
+      });
+    }
+
     const logoutBtn = this.root.querySelector('#auth-logout-btn');
     if (logoutBtn) {
       logoutBtn.addEventListener('click', async (e) => {
         e.stopPropagation();
         await this.handleSignOut();
       });
+    }
+  }
+
+  async handleAvatarUpload(file) {
+    if (!file || this.isUploadingAvatar) return;
+
+    // Fast client-side check
+    const validation = validateImageFile(file);
+    if (!validation.valid) {
+      this.avatarError = validation.error;
+      this.renderLoggedIn();
+      return;
+    }
+
+    this.isUploadingAvatar = true;
+    this.avatarError = null;
+    this.avatarSuccess = null;
+    this.renderLoggedIn();
+
+    try {
+      const res = await uploadAvatar(file, userDataService);
+      if (res.success) {
+        this.avatarSuccess = 'Profile picture updated!';
+        if (typeof window !== 'undefined' && typeof window.showToast === 'function') {
+          window.showToast('Profile picture updated!');
+        }
+        setTimeout(() => {
+          this.avatarSuccess = null;
+          if (this.isDropdownOpen) this.renderLoggedIn();
+        }, 3500);
+      } else {
+        this.avatarError = res.error || "Couldn't upload your profile picture.";
+      }
+    } catch (err) {
+      console.error('[AuthUI] Exception uploading avatar:', err);
+      this.avatarError = "Couldn't upload your profile picture. Please try again.";
+    } finally {
+      this.isUploadingAvatar = false;
+      this.renderLoggedIn();
+    }
+  }
+
+  async handleAvatarRemove() {
+    if (this.isUploadingAvatar) return;
+
+    const confirmed = typeof window !== 'undefined' ? window.confirm('Remove your profile picture?') : true;
+    if (!confirmed) return;
+
+    this.isUploadingAvatar = true;
+    this.avatarError = null;
+    this.avatarSuccess = null;
+    this.renderLoggedIn();
+
+    try {
+      const res = await removeAvatar(userDataService);
+      if (res.success) {
+        this.avatarSuccess = 'Profile picture removed.';
+        setTimeout(() => {
+          this.avatarSuccess = null;
+          if (this.isDropdownOpen) this.renderLoggedIn();
+        }, 3000);
+      } else {
+        this.avatarError = res.error || 'Failed to remove profile picture.';
+      }
+    } catch (err) {
+      console.error('[AuthUI] Exception removing avatar:', err);
+      this.avatarError = 'Failed to remove profile picture. Please try again.';
+    } finally {
+      this.isUploadingAvatar = false;
+      this.renderLoggedIn();
     }
   }
 
@@ -1091,6 +1234,9 @@ class AuthUI {
   async handleSignOut() {
     if (this.isLoggingOut) return;
     this.isLoggingOut = true;
+    this.isUploadingAvatar = false;
+    this.avatarError = null;
+    this.avatarSuccess = null;
     this.renderLoggedIn();
 
     // Flush pending changes before signout

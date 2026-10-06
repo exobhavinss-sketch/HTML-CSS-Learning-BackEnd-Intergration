@@ -193,3 +193,25 @@ When a user clicks **Sign Out**:
      - Validated pending records for the current user are upserted to Supabase.
      - Upon completion, the badge cleanly returns to `● Saved`.
 
+---
+
+## 8. User Profile Picture & Avatar Storage
+
+1. **Storage Bucket & Policies**:
+   - Dedicated public bucket `avatars` created via `supabase/migrations/002_avatar_storage.sql`.
+   - 5 MB maximum file size limit, allowed MIME types: `image/jpeg`, `image/png`, `image/webp`.
+   - File path convention: `avatars/${user_id}/avatar-${timestamp}.webp`.
+   - Storage RLS:
+     - `SELECT`: Public access for avatar image rendering.
+     - `INSERT`, `UPDATE`, `DELETE`: Authenticated users can only operate on their own folder (`(storage.foldername(name))[1] = auth.uid()::text`).
+
+2. **Client-Side Image Processing**:
+   - Client validates format (JPEG/PNG/WEBP) and file size (≤ 5 MB).
+   - High-quality 512×512 center square crop and WebP compression via HTML5 `<canvas>`.
+
+3. **Lifecycle & Persistence**:
+   - `uploadAvatar`: Uploads processed WebP to storage, updates `public.profiles.avatar_url`, syncs `user_metadata.avatar_url`, and cleans up older avatar files.
+   - `removeAvatar`: Clears `avatar_url` from `public.profiles` and `user_metadata`, deletes the storage file, and immediately returns to initials.
+   - `fallback`: If no avatar exists or image loading fails, dynamically generates initials from user's full name.
+
+

@@ -125,7 +125,7 @@
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  padding: 4px 10px 4px 6px;
+  padding: 4px 12px 4px 5px;
   border-radius: 24px;
   border: 1px solid var(--line);
   background: var(--panel);
@@ -134,7 +134,8 @@
   font-weight: 600;
   cursor: pointer;
   transition: border-color 0.15s ease, background-color 0.15s ease, box-shadow 0.15s ease;
-  max-width: 220px;
+  max-width: 240px;
+  min-height: 40px;
 }
 
 .auth-user-btn:hover {
@@ -153,15 +154,15 @@
 }
 
 .auth-avatar-mini {
-  width: 28px;
-  height: 28px;
+  width: 32px;
+  height: 32px;
   border-radius: 50%;
   object-fit: cover;
   background: var(--accent-soft);
   flex-shrink: 0;
   display: inline-grid;
   place-items: center;
-  font-size: 0.75rem;
+  font-size: 0.8rem;
   font-weight: 700;
   color: var(--accent);
   overflow: hidden;
@@ -193,7 +194,7 @@
   position: absolute;
   top: calc(100% + 8px);
   right: 0;
-  width: 270px;
+  width: 290px;
   max-width: calc(100vw - 32px);
   background: var(--panel);
   border: 1.5px solid var(--line);
@@ -225,8 +226,8 @@
 }
 
 .auth-avatar-large {
-  width: 44px;
-  height: 44px;
+  width: 50px;
+  height: 50px;
   border-radius: 50%;
   object-fit: cover;
   background: var(--accent-soft);
@@ -234,10 +235,11 @@
   place-items: center;
   font-family: var(--display);
   font-weight: 800;
-  font-size: 1.1rem;
+  font-size: 1.25rem;
   color: var(--accent);
   flex-shrink: 0;
   border: 1.5px solid var(--line);
+  overflow: hidden;
 }
 
 .auth-dropdown-user-text {
@@ -264,6 +266,84 @@
   overflow: hidden;
   text-overflow: ellipsis;
   margin: 2px 0 0;
+}
+
+/* Avatar Dropdown Action Controls */
+.auth-dropdown-avatar-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 2px;
+}
+
+.auth-dropdown-avatar-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--body);
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background-color 0.15s ease, color 0.15s ease;
+}
+
+.auth-dropdown-avatar-btn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.auth-dropdown-avatar-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.auth-dropdown-remove-photo-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--muted);
+  font-family: var(--body);
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: color 0.15s ease, background-color 0.15s ease;
+}
+
+.auth-dropdown-remove-photo-btn:hover {
+  color: var(--warn);
+  background: var(--warn-soft);
+}
+
+.auth-avatar-msg {
+  font-size: 0.78rem;
+  line-height: 1.35;
+  padding: 6px 10px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.auth-avatar-msg.error {
+  background: var(--warn-soft);
+  color: var(--warn);
+  border: 1px solid var(--warn);
+}
+
+.auth-avatar-msg.success {
+  background: rgba(22, 163, 74, 0.12);
+  color: #16a34a;
+  border: 1px solid rgba(22, 163, 74, 0.3);
 }
 
 .auth-dropdown-divider {

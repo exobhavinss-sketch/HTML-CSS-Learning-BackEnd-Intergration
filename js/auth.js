@@ -206,9 +206,10 @@ export function subscribeToAuthChanges(callback) {
 /**
  * Normalizes user metadata with robust fallbacks.
  * @param {any} user Supabase User object
+ * @param {any} [profileRecord=null] Optional database profile record from profiles table
  * @returns {{ name: string, email: string, avatar: string | null, initials: string }}
  */
-export function formatUserProfile(user) {
+export function formatUserProfile(user, profileRecord = null) {
   if (!user) {
     return { name: '', email: '', avatar: null, initials: '' };
   }
@@ -216,8 +217,8 @@ export function formatUserProfile(user) {
   const meta = user.user_metadata || {};
   const email = user.email || '';
 
-  // Name fallback order: full_name -> name -> email prefix -> 'User'
-  let name = meta.full_name || meta.name || '';
+  // Name fallback order: profileRecord.full_name -> full_name -> name -> email prefix -> 'User'
+  let name = (profileRecord && profileRecord.full_name) || meta.full_name || meta.name || '';
   if (!name.trim() && email) {
     name = email.split('@')[0];
   }
@@ -225,15 +226,20 @@ export function formatUserProfile(user) {
     name = 'User';
   }
 
-  const avatar = meta.avatar_url || meta.picture || null;
+  // Avatar priority: database profile -> user metadata -> picture -> null
+  const avatar = (profileRecord && profileRecord.avatar_url) || meta.avatar_url || meta.picture || null;
 
   // Initials generation for fallback avatar badge
-  const initials = name
-    .trim()
-    .split(/\s+/)
-    .slice(0, 2)
-    .map(part => part[0]?.toUpperCase() || '')
-    .join('') || (email ? email[0].toUpperCase() : 'U');
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  let initials = '';
+  if (parts.length >= 2) {
+    initials = ((parts[0][0] || '') + (parts[1][0] || '')).toUpperCase();
+  } else if (parts.length === 1 && parts[0].length > 0) {
+    initials = parts[0][0].toUpperCase();
+  }
+  if (!initials) {
+    initials = email ? email[0].toUpperCase() : 'U';
+  }
 
   return { name, email, avatar, initials };
 }

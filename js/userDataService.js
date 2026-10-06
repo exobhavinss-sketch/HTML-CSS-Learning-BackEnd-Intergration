@@ -687,15 +687,16 @@ class UserDataService {
   }
 
   /**
-   * Saves or updates profile information (full_name, roll_number).
-   * @param {{ fullName?: string, rollNumber?: string }} payload
+   * Saves or updates profile information (full_name, roll_number, avatar_url).
+   * @param {{ fullName?: string, rollNumber?: string, avatarUrl?: string|null }} payload
    * @param {boolean} [immediate=false]
    */
-  async saveProfile({ fullName, rollNumber }, immediate = false) {
+  async saveProfile({ fullName, rollNumber, avatarUrl }, immediate = false) {
     const existing = this.cachedData.profile || {};
     const updated = {
       full_name: fullName !== undefined ? fullName : (existing.full_name || ''),
-      roll_number: rollNumber !== undefined ? rollNumber : (existing.roll_number || '')
+      roll_number: rollNumber !== undefined ? rollNumber : (existing.roll_number || ''),
+      avatar_url: avatarUrl !== undefined ? avatarUrl : (existing.avatar_url || null)
     };
 
     this.cachedData.profile = { ...(this.cachedData.profile || {}), ...updated };
@@ -712,6 +713,7 @@ class UserDataService {
         id: userId,
         full_name: updated.full_name,
         roll_number: updated.roll_number,
+        avatar_url: updated.avatar_url,
         updated_at: new Date().toISOString()
       };
 
