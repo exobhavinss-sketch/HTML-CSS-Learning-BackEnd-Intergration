@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <style>html,body{margin:0}img{max-width:100%}[hidden]{display:none!important}</style>
 <title>HTML &amp; CSS Tag Finder</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%231f5fbf'/><text x='50' y='68' font-family='monospace' font-weight='bold' font-size='52' fill='white' text-anchor='middle'>&lt;/&gt;</text></svg>">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=Recursive:wght,CASL,MONO@300..900,0..1,0..1&display=swap">
@@ -1788,7 +1789,7 @@ const PRACTICE=[
   justify-content: space-between;
   align-items: center;
 }`,hint:'The header is the parent. Which justify-content value pushes the first child left and the last child right?',
-  checks:h=>{const hd=h.q('.header'),lg=h.q('.logo'),ln=h.q('.links'),I=h.inner(hd);return [[h.flex(hd),'Turn on flexbox on .header.'],[Math.abs(h.r(lg).left-I.left)<4,'The logo should be on the left edge.'],[Math.abs(h.r(ln).right-I.right)<4,'The menu should touch the right edge.'],[Math.abs(h.r(lg).top-h.r(ln).top)<40,'The logo and menu should be on the same line.']];}},
+  checks:h=>{const hd=h.q('.header'),lg=h.q('.logo'),ln=h.q('.links'),I=h.inner(hd);return [[h.flex(hd),'Turn on flexbox on .header.'],[Math.abs(h.r(lg).left-I.left)<6,'The logo should be on the left edge.'],[Math.abs(h.r(ln).right-I.right)<8,'The menu should touch the right edge.'],[Math.abs(h.r(lg).top-h.r(ln).top)<40,'The logo and menu should be on the same line.']];}},
  {id:'f-center',mode:'css',t:'Center a box both ways',topic:'flexcenter',
   html:`<div class="parent">
   <div class="child">Hello!</div>
@@ -2030,11 +2031,11 @@ $('#q').addEventListener('input',e=>renderTopics(e.target.value));
 $('#browse').addEventListener('click',()=>{const s=$('#side');const o=!s.classList.contains('open');s.classList.toggle('open',o);$('#browse').setAttribute('aria-expanded',o);});
 
 /* ---------- main ---------- */
-function open(id,fromClick){
+function open(id,fromClick,isAuthRedirect){
   if(id==='xray'){openXray(fromClick);return;}
   if(id==='practice'){openPractice(fromClick);return;}
   const item=byId(id)||byId('navbar');state.id=item.id;
-  try{history.replaceState(null,'','#'+item.id);}catch(e){}
+  if(!isAuthRedirect){try{history.replaceState(null,'','#'+item.id);}catch(e){}}
   const g=GROUPS.find(x=>x.id===item.g);
   const idx=ITEMS.indexOf(item);const prev=ITEMS[idx-1],next=ITEMS[idx+1];
   const html=state.html[item.id]??item.html;
@@ -2200,6 +2201,7 @@ const PKEY='tagfinder-practice-v1';
 let PS={name:'',roll:'',solved:{},work:{}};
 try{const v=JSON.parse(localStorage.getItem(PKEY)||'null');if(v)PS=Object.assign(PS,v);}catch(e){}
 function psSave(){try{localStorage.setItem(PKEY,JSON.stringify(PS));}catch(e){}}
+window.PS=PS;window.psSave=psSave;
 state.pset='HTM';state.pidx=0;state.pmsg=null;
 
 function mkHelpers(d){
@@ -2321,9 +2323,13 @@ function copy(text,el,msg){
 window.addEventListener('resize',()=>fitFrame());
 
 /* ---------- start ---------- */
-const start=(location.hash||'').slice(1);
+const rawHash=(location.hash||'').slice(1);
+const isAuthHash=rawHash.startsWith('access_token=')||rawHash.includes('&access_token=')||rawHash.startsWith('error=')||rawHash.startsWith('error_description=')||rawHash.startsWith('refresh_token=');
+const isAuthQuery=location.search.includes('code=')||location.search.includes('error=');
+const isAuthRedirect=isAuthHash||isAuthQuery;
+const start=isAuthRedirect?'navbar':rawHash;
 renderTopics('');
-open(byId(start)||['xray','practice'].includes(start)?start:'navbar',false);
+open(byId(start)||['xray','practice'].includes(start)?start:'navbar',false,isAuthRedirect);
 </script>
 
 <script>

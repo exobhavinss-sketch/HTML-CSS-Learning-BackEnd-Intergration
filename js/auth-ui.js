@@ -90,13 +90,55 @@ class AuthUI {
       this.currentUser = session?.user || null;
       this.isSigningIn = false;
       this.isLoggingOut = false;
+      if (this.currentUser) {
+        if (this.isModalOpen) {
+          this.closeModal();
+        }
+        this.syncUserProfileWithPractice();
+      }
       this.render();
     });
+
+    // Check for OAuth error in URL hash or search params
+    if (typeof window !== 'undefined') {
+      const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ''));
+      const queryParams = new URLSearchParams(window.location.search);
+      const oauthError = hashParams.get('error_description') || hashParams.get('error') ||
+                         queryParams.get('error_description') || queryParams.get('error');
+
+      if (oauthError) {
+        console.warn('[Auth] OAuth error detected in URL:', oauthError);
+        this.errorMessage = decodeURIComponent(oauthError.replace(/\+/g, ' '));
+        this.openModal();
+      }
+    }
 
     // Check initial session
     const session = await getCurrentSession();
     this.currentUser = session?.user || null;
+    if (this.currentUser) {
+      this.syncUserProfileWithPractice();
+    }
     this.render();
+  }
+
+  syncUserProfileWithPractice() {
+    if (!this.currentUser) return;
+    const profile = formatUserProfile(this.currentUser);
+    if (!profile.name) return;
+
+    if (typeof window !== 'undefined' && window.PS) {
+      if (!window.PS.name || !window.PS.name.trim() || window.PS.name === 'User') {
+        window.PS.name = profile.name;
+        if (typeof window.psSave === 'function') {
+          window.psSave();
+        }
+        const nameInput = document.querySelector('#p-name');
+        if (nameInput) {
+          nameInput.value = profile.name;
+        }
+      }
+    }
   }
 
   renderLoading() {
@@ -243,8 +285,8 @@ class AuthUI {
             <div class="auth-modal-badge">
               <span style="font-weight: 800;">&lt;/&gt;</span> Account
             </div>
-            <h2 class="auth-modal-title" id="auth-modal-title">Sign in to Tailwind Lab</h2>
-            <p class="auth-modal-subtitle">Continue learning Tailwind CSS</p>
+            <h2 class="auth-modal-title" id="auth-modal-title">Sign in to Tag Finder</h2>
+            <p class="auth-modal-subtitle">Continue your HTML &amp; CSS learning journey</p>
           </div>
 
           ${this.errorMessage ? `
@@ -284,6 +326,22 @@ class AuthUI {
         if (e.target === backdrop) this.closeModal();
       });
     }
+
+    modalRoot.addEventListener('keydown', (e) => {
+      if (e.key === 'Tab') {
+        const focusables = Array.from(modalRoot.querySelectorAll('button:not([disabled])'));
+        if (focusables.length === 0) return;
+        const first = focusables[0];
+        const last = focusables[focusables.length - 1];
+        if (e.shiftKey && document.activeElement === first) {
+          e.preventDefault();
+          last.focus();
+        } else if (!e.shiftKey && document.activeElement === last) {
+          e.preventDefault();
+          first.focus();
+        }
+      }
+    });
 
     if (googleBtn) {
       googleBtn.addEventListener('click', async () => {
@@ -343,13 +401,15 @@ class AuthUI {
   }
 }
 
-// Instantiate and initialize on DOMContentLoaded
+// Instantiate and initialize on DOMContentLoaded in browser environment
 const authUI = new AuthUI();
 
-if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', () => authUI.init());
-} else {
-  authUI.init();
+if (typeof document !== 'undefined') {
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', () => authUI.init());
+  } else {
+    authUI.init();
+  }
 }
 
 export { authUI };

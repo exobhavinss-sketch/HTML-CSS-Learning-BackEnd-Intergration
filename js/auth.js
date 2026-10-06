@@ -34,12 +34,18 @@ export async function signInWithGoogle() {
       return { data: null, error };
     }
 
+    // In browser context, ensure redirect is initiated if Supabase hasn't done so already
+    if (data?.url && typeof window !== 'undefined' && !window.location.href.includes(data.url)) {
+      window.location.assign(data.url);
+    }
+
     return { data, error: null };
   } catch (err) {
     console.error('[Auth] Unexpected error during Google sign-in:', err);
     return { data: null, error: err };
   }
 }
+
 
 /**
  * Signs out the current user session from Supabase.

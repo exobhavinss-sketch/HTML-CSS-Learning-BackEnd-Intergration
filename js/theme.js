@@ -152,9 +152,11 @@ export function initTheme(rootSelector = '#theme-root') {
   }
 }
 
-// Auto-initialize when script loads
-if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', () => initTheme());
-} else {
-  initTheme();
+// Auto-initialize in browser environment
+if (typeof document !== 'undefined') {
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', () => initTheme());
+  } else {
+    initTheme();
+  }
 }
