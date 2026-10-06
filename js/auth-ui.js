@@ -1,24 +1,22 @@
 /**
  * Authentication UI Controller
- * Manages the Sign In button, Sign In Modal, User Profile dropdown, and Auth state.
+ * Manages Sign In, Sign Up, Email Verification, Forgot Password, Reset Password,
+ * User Profile dropdown, and state transitions using Supabase Auth.
  */
 import {
-  signInWithGoogle,
+  signUp,
+  signIn,
   signOut,
+  forgotPassword,
+  resetPassword,
+  resendVerificationEmail,
   getCurrentSession,
   subscribeToAuthChanges,
-  formatUserProfile
+  formatUserProfile,
+  getFriendlyErrorMessage
 } from './auth.js';
 
 // SVG Icons
-const GOOGLE_ICON_SVG = `
-<svg class="auth-google-icon" viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
-  <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
-  <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
-  <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"/>
-  <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"/>
-</svg>`;
-
 const CHEVRON_DOWN_SVG = `
 <svg class="auth-chevron" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
   <path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clip-rule="evenodd" />
@@ -43,6 +41,38 @@ const USER_ICON_SVG = `
   <circle cx="12" cy="7" r="4"/>
 </svg>`;
 
+const USER_PLUS_ICON_SVG = `
+<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+  <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+  <circle cx="8.5" cy="7" r="4"/>
+  <line x1="20" y1="8" x2="20" y2="14"/>
+  <line x1="23" y1="11" x2="17" y2="11"/>
+</svg>`;
+
+const EYE_ICON_SVG = `
+<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+  <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+  <circle cx="12" cy="12" r="3"/>
+</svg>`;
+
+const EYE_OFF_ICON_SVG = `
+<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+  <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/>
+  <line x1="1" y1="1" x2="23" y2="23"/>
+</svg>`;
+
+const MAIL_ICON_SVG = `
+<svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+  <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/>
+  <polyline points="22,6 12,13 2,6"/>
+</svg>`;
+
+const CHECK_CIRCLE_SVG = `
+<svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+  <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
+  <polyline points="22 4 12 14.01 9 11.01"/>
+</svg>`;
+
 function escapeHtml(str) {
   if (!str) return '';
   return String(str)
@@ -59,9 +89,22 @@ class AuthUI {
     this.currentUser = null;
     this.isDropdownOpen = false;
     this.isModalOpen = false;
-    this.isSigningIn = false;
+
+    // Modal state: 'signin' | 'signup' | 'verification-pending' | 'forgot' | 'reset-password'
+    this.modalMode = 'signin';
+
+    // Loading flags
+    this.isLoading = false;
     this.isLoggingOut = false;
-    this.errorMessage = null;
+    this.isResending = false;
+
+    // Feedback messages
+    this.generalError = null;
+    this.generalSuccess = null;
+    this.fieldErrors = {};
+
+    // Temp state
+    this.pendingEmail = '';
 
     this.handleOutsideClick = this.handleOutsideClick.bind(this);
     this.handleKeyDown = this.handleKeyDown.bind(this);
@@ -78,42 +121,52 @@ class AuthUI {
       return;
     }
 
-    // Step 13: Initial loading state to prevent UI flicker
     this.renderLoading();
 
-    // Attach global event listeners
+    // Attach global listeners
     document.addEventListener('click', this.handleOutsideClick);
     document.addEventListener('keydown', this.handleKeyDown);
 
-    // Subscribe to auth changes
+    // Subscribe to auth state changes
     subscribeToAuthChanges((event, session) => {
       this.currentUser = session?.user || null;
-      this.isSigningIn = false;
+      this.isLoading = false;
       this.isLoggingOut = false;
+
+      if (event === 'PASSWORD_RECOVERY') {
+        this.openModal('reset-password');
+        return;
+      }
+
       if (this.currentUser) {
-        if (this.isModalOpen) {
+        if (this.isModalOpen && this.modalMode !== 'reset-password') {
           this.closeModal();
         }
         this.syncUserProfileWithPractice();
       }
+
       this.render();
     });
 
-    // Check for OAuth error in URL hash or search params
+    // Check for password recovery hash in URL (type=recovery)
     if (typeof window !== 'undefined') {
-      const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ''));
+      const hashStr = window.location.hash.replace(/^#/, '');
+      const hashParams = new URLSearchParams(hashStr);
       const queryParams = new URLSearchParams(window.location.search);
-      const oauthError = hashParams.get('error_description') || hashParams.get('error') ||
-                         queryParams.get('error_description') || queryParams.get('error');
 
-      if (oauthError) {
-        console.warn('[Auth] OAuth error detected in URL:', oauthError);
-        this.errorMessage = decodeURIComponent(oauthError.replace(/\+/g, ' '));
-        this.openModal();
+      if (hashParams.get('type') === 'recovery' || queryParams.get('type') === 'recovery') {
+        this.openModal('reset-password');
+      }
+
+      const authError = hashParams.get('error_description') || hashParams.get('error') ||
+                        queryParams.get('error_description') || queryParams.get('error');
+      if (authError) {
+        this.generalError = decodeURIComponent(authError.replace(/\+/g, ' '));
+        this.openModal('signin');
       }
     }
 
-    // Check initial session
+    // Retrieve initial session
     const session = await getCurrentSession();
     this.currentUser = session?.user || null;
     if (this.currentUser) {
@@ -163,17 +216,31 @@ class AuthUI {
 
   renderLoggedOut() {
     this.root.innerHTML = `
-      <button type="button" class="auth-btn-signin" id="auth-signin-btn" aria-haspopup="dialog">
-        ${USER_ICON_SVG}
-        <span>Sign In</span>
-      </button>
+      <div class="auth-logged-out-group">
+        <button type="button" class="auth-btn-signin" id="auth-signin-btn" aria-haspopup="dialog">
+          ${USER_ICON_SVG}
+          <span>Sign In</span>
+        </button>
+        <button type="button" class="auth-btn-signup" id="auth-signup-btn" aria-haspopup="dialog">
+          ${USER_PLUS_ICON_SVG}
+          <span>Create Account</span>
+        </button>
+      </div>
     `;
 
-    const btn = this.root.querySelector('#auth-signin-btn');
-    if (btn) {
-      btn.addEventListener('click', (e) => {
+    const signInBtn = this.root.querySelector('#auth-signin-btn');
+    if (signInBtn) {
+      signInBtn.addEventListener('click', (e) => {
         e.stopPropagation();
-        this.openModal();
+        this.openModal('signin');
+      });
+    }
+
+    const signUpBtn = this.root.querySelector('#auth-signup-btn');
+    if (signUpBtn) {
+      signUpBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        this.openModal('signup');
       });
     }
   }
@@ -183,12 +250,10 @@ class AuthUI {
     const escapedName = escapeHtml(profile.name);
     const escapedEmail = escapeHtml(profile.email);
 
-    // Mini avatar markup
     const avatarMiniHtml = profile.avatar
       ? `<img src="${escapeHtml(profile.avatar)}" alt="${escapedName}" class="auth-avatar-mini" referrerpolicy="no-referrer">`
       : `<span class="auth-avatar-mini">${escapeHtml(profile.initials)}</span>`;
 
-    // Large avatar markup for dropdown
     const avatarLargeHtml = profile.avatar
       ? `<img src="${escapeHtml(profile.avatar)}" alt="${escapedName}" class="auth-avatar-large" referrerpolicy="no-referrer">`
       : `<span class="auth-avatar-large">${escapeHtml(profile.initials)}</span>`;
@@ -211,7 +276,7 @@ class AuthUI {
           </div>
           <div class="auth-dropdown-divider" role="separator"></div>
           <button type="button" class="auth-dropdown-logout-btn" id="auth-logout-btn" role="menuitem" ${this.isLoggingOut ? 'disabled' : ''}>
-            ${this.isLoggingOut ? `<span class="auth-spinner-sm" aria-hidden="true"></span><span>Logging out...</span>` : `${LOGOUT_ICON_SVG}<span>Logout</span>`}
+            ${this.isLoggingOut ? `<span class="auth-spinner-sm" aria-hidden="true"></span><span>Logging out...</span>` : `${LOGOUT_ICON_SVG}<span>Sign Out</span>`}
           </button>
         </div>
       ` : ''}
@@ -246,21 +311,33 @@ class AuthUI {
     }
   }
 
-  openModal() {
+  /**
+   * Opens the authentication modal in the specified mode.
+   * @param {'signin' | 'signup' | 'verification-pending' | 'forgot' | 'reset-password'} mode
+   */
+  openModal(mode = 'signin') {
+    this.modalMode = mode;
     this.isModalOpen = true;
-    this.errorMessage = null;
+    this.generalError = null;
+    this.generalSuccess = null;
+    this.fieldErrors = {};
+    this.isLoading = false;
     this.closeDropdown();
     this.renderModal();
   }
 
   closeModal() {
     this.isModalOpen = false;
-    this.isSigningIn = false;
-    this.errorMessage = null;
+    this.isLoading = false;
+    this.generalError = null;
+    this.generalSuccess = null;
+    this.fieldErrors = {};
+
     const modal = document.querySelector('#auth-modal-root');
     if (modal) {
       modal.remove();
     }
+
     // Return focus to sign in button if available
     const signInBtn = document.querySelector('#auth-signin-btn');
     if (signInBtn) signInBtn.focus();
@@ -274,62 +351,408 @@ class AuthUI {
       document.body.appendChild(modalRoot);
     }
 
+    let modalContent = '';
+    switch (this.modalMode) {
+      case 'signup':
+        modalContent = this.getSignupModalHtml();
+        break;
+      case 'verification-pending':
+        modalContent = this.getVerificationPendingModalHtml();
+        break;
+      case 'forgot':
+        modalContent = this.getForgotPasswordModalHtml();
+        break;
+      case 'reset-password':
+        modalContent = this.getResetPasswordModalHtml();
+        break;
+      case 'signin':
+      default:
+        modalContent = this.getSigninModalHtml();
+        break;
+    }
+
     modalRoot.innerHTML = `
       <div class="auth-modal-backdrop" id="auth-modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="auth-modal-title">
         <div class="auth-modal-card" id="auth-modal-card">
           <button type="button" class="auth-modal-close-btn" id="auth-modal-close-btn" aria-label="Close authentication modal">
             ${CLOSE_ICON_SVG}
           </button>
-
-          <div class="auth-modal-header">
-            <div class="auth-modal-badge">
-              <span style="font-weight: 800;">&lt;/&gt;</span> Account
-            </div>
-            <h2 class="auth-modal-title" id="auth-modal-title">Sign in to Tag Finder</h2>
-            <p class="auth-modal-subtitle">Continue your HTML &amp; CSS learning journey</p>
-          </div>
-
-          ${this.errorMessage ? `
-            <div class="auth-error-banner" role="alert">
-              <span>⚠️</span>
-              <span>${escapeHtml(this.errorMessage)}</span>
-            </div>
-          ` : ''}
-
-          <div class="auth-modal-actions">
-            <button type="button" class="auth-google-btn" id="auth-google-btn" ${this.isSigningIn ? 'disabled' : ''}>
-              ${this.isSigningIn
-                ? `<span class="auth-spinner-sm" aria-hidden="true"></span><span>Signing in...</span>`
-                : `${GOOGLE_ICON_SVG}<span>Continue with Google</span>`}
-            </button>
-          </div>
-
-          <div style="display: flex; justify-content: flex-end; margin-top: 4px;">
-            <button type="button" class="auth-modal-cancel-btn" id="auth-modal-cancel-btn">
-              Cancel
-            </button>
-          </div>
+          ${modalContent}
         </div>
       </div>
     `;
 
-    // Event handlers inside modal
+    this.bindModalEvents(modalRoot);
+  }
+
+  getSigninModalHtml() {
+    return `
+      <div class="auth-modal-header">
+        <div class="auth-modal-badge">
+          <span style="font-weight: 800;">&lt;/&gt;</span> Account
+        </div>
+        <h2 class="auth-modal-title" id="auth-modal-title">Sign in to Tag Finder</h2>
+        <p class="auth-modal-subtitle">Welcome back! Enter your details to continue.</p>
+      </div>
+
+      ${this.generalError ? `
+        <div class="auth-error-banner" role="alert">
+          <span>⚠️</span>
+          <span>${escapeHtml(this.generalError)}</span>
+        </div>
+      ` : ''}
+
+      ${this.generalSuccess ? `
+        <div class="auth-success-banner" role="status">
+          <span>✓</span>
+          <span>${escapeHtml(this.generalSuccess)}</span>
+        </div>
+      ` : ''}
+
+      <form class="auth-form" id="auth-signin-form" novalidate>
+        <div class="auth-field">
+          <label class="auth-label" for="auth-signin-email">Email address</label>
+          <input
+            type="email"
+            class="auth-input ${this.fieldErrors.email ? 'has-error' : ''}"
+            id="auth-signin-email"
+            name="email"
+            autocomplete="email"
+            placeholder="name@example.com"
+            required
+          />
+          ${this.fieldErrors.email ? `<p class="auth-field-error" role="alert">${escapeHtml(this.fieldErrors.email)}</p>` : ''}
+        </div>
+
+        <div class="auth-field">
+          <div class="auth-label-row">
+            <label class="auth-label" for="auth-signin-password">Password</label>
+            <button type="button" class="auth-link-btn" id="auth-goto-forgot">Forgot password?</button>
+          </div>
+          <div class="auth-input-wrapper">
+            <input
+              type="password"
+              class="auth-input ${this.fieldErrors.password ? 'has-error' : ''}"
+              id="auth-signin-password"
+              name="password"
+              autocomplete="current-password"
+              placeholder="••••••••"
+              required
+            />
+            <button type="button" class="auth-pw-toggle" data-target="auth-signin-password" aria-label="Show password" aria-pressed="false">
+              ${EYE_ICON_SVG}
+            </button>
+          </div>
+          ${this.fieldErrors.password ? `<p class="auth-field-error" role="alert">${escapeHtml(this.fieldErrors.password)}</p>` : ''}
+        </div>
+
+        <button type="submit" class="auth-submit-btn" id="auth-signin-submit" ${this.isLoading ? 'disabled' : ''}>
+          ${this.isLoading ? `<span class="auth-spinner-sm" aria-hidden="true"></span><span>Signing in...</span>` : `<span>Sign In</span>`}
+        </button>
+      </form>
+
+      <div class="auth-modal-footer">
+        <span class="auth-footer-text">Don't have an account?</span>
+        <button type="button" class="auth-link-btn bold" id="auth-goto-signup">Create account</button>
+      </div>
+    `;
+  }
+
+  getSignupModalHtml() {
+    return `
+      <div class="auth-modal-header">
+        <div class="auth-modal-badge">
+          <span style="font-weight: 800;">&lt;/&gt;</span> Account
+        </div>
+        <h2 class="auth-modal-title" id="auth-modal-title">Create Account</h2>
+        <p class="auth-modal-subtitle">Start tracking your HTML &amp; CSS progress.</p>
+      </div>
+
+      ${this.generalError ? `
+        <div class="auth-error-banner" role="alert">
+          <span>⚠️</span>
+          <span>${escapeHtml(this.generalError)}</span>
+        </div>
+      ` : ''}
+
+      <form class="auth-form" id="auth-signup-form" novalidate>
+        <div class="auth-field">
+          <label class="auth-label" for="auth-signup-name">Full Name</label>
+          <input
+            type="text"
+            class="auth-input ${this.fieldErrors.fullName ? 'has-error' : ''}"
+            id="auth-signup-name"
+            name="fullName"
+            autocomplete="name"
+            placeholder="Alex Johnson"
+            required
+          />
+          ${this.fieldErrors.fullName ? `<p class="auth-field-error" role="alert">${escapeHtml(this.fieldErrors.fullName)}</p>` : ''}
+        </div>
+
+        <div class="auth-field">
+          <label class="auth-label" for="auth-signup-email">Email address</label>
+          <input
+            type="email"
+            class="auth-input ${this.fieldErrors.email ? 'has-error' : ''}"
+            id="auth-signup-email"
+            name="email"
+            autocomplete="email"
+            placeholder="name@example.com"
+            required
+          />
+          ${this.fieldErrors.email ? `<p class="auth-field-error" role="alert">${escapeHtml(this.fieldErrors.email)}</p>` : ''}
+        </div>
+
+        <div class="auth-field">
+          <label class="auth-label" for="auth-signup-password">Password</label>
+          <div class="auth-input-wrapper">
+            <input
+              type="password"
+              class="auth-input ${this.fieldErrors.password ? 'has-error' : ''}"
+              id="auth-signup-password"
+              name="password"
+              autocomplete="new-password"
+              placeholder="At least 8 characters"
+              required
+            />
+            <button type="button" class="auth-pw-toggle" data-target="auth-signup-password" aria-label="Show password" aria-pressed="false">
+              ${EYE_ICON_SVG}
+            </button>
+          </div>
+          <p class="auth-field-hint">Must be at least 8 characters long.</p>
+          ${this.fieldErrors.password ? `<p class="auth-field-error" role="alert">${escapeHtml(this.fieldErrors.password)}</p>` : ''}
+        </div>
+
+        <div class="auth-field">
+          <label class="auth-label" for="auth-signup-confirm-password">Confirm Password</label>
+          <div class="auth-input-wrapper">
+            <input
+              type="password"
+              class="auth-input ${this.fieldErrors.confirmPassword ? 'has-error' : ''}"
+              id="auth-signup-confirm-password"
+              name="confirmPassword"
+              autocomplete="new-password"
+              placeholder="Re-enter password"
+              required
+            />
+            <button type="button" class="auth-pw-toggle" data-target="auth-signup-confirm-password" aria-label="Show password" aria-pressed="false">
+              ${EYE_ICON_SVG}
+            </button>
+          </div>
+          ${this.fieldErrors.confirmPassword ? `<p class="auth-field-error" role="alert">${escapeHtml(this.fieldErrors.confirmPassword)}</p>` : ''}
+        </div>
+
+        <button type="submit" class="auth-submit-btn" id="auth-signup-submit" ${this.isLoading ? 'disabled' : ''}>
+          ${this.isLoading ? `<span class="auth-spinner-sm" aria-hidden="true"></span><span>Creating account...</span>` : `<span>Create Account</span>`}
+        </button>
+      </form>
+
+      <div class="auth-modal-footer">
+        <span class="auth-footer-text">Already have an account?</span>
+        <button type="button" class="auth-link-btn bold" id="auth-goto-signin">Sign In</button>
+      </div>
+    `;
+  }
+
+  getVerificationPendingModalHtml() {
+    return `
+      <div class="auth-status-container">
+        <div class="auth-status-icon-box mail">
+          ${MAIL_ICON_SVG}
+        </div>
+        <h2 class="auth-modal-title center" id="auth-modal-title">Check Your Email</h2>
+        <p class="auth-modal-subtitle center">Account created successfully.</p>
+
+        <p class="auth-status-description">
+          We've sent a verification link to<br>
+          <strong class="auth-highlight-email">${escapeHtml(this.pendingEmail || 'your email')}</strong>.<br><br>
+          Please check your inbox and click the verification link to activate your account.
+        </p>
+
+        ${this.generalSuccess ? `
+          <div class="auth-success-banner" role="status">
+            <span>✓</span>
+            <span>${escapeHtml(this.generalSuccess)}</span>
+          </div>
+        ` : ''}
+
+        ${this.generalError ? `
+          <div class="auth-error-banner" role="alert">
+            <span>⚠️</span>
+            <span>${escapeHtml(this.generalError)}</span>
+          </div>
+        ` : ''}
+
+        <div class="auth-status-actions">
+          <p class="auth-resend-prompt">Didn't receive the email?</p>
+          <button type="button" class="auth-link-btn bold" id="auth-resend-btn" ${this.isResending ? 'disabled' : ''}>
+            ${this.isResending ? `<span class="auth-spinner-sm" aria-hidden="true"></span><span>Resending email...</span>` : `<span>Resend confirmation email</span>`}
+          </button>
+        </div>
+
+        <div class="auth-modal-footer center" style="margin-top: 14px;">
+          <button type="button" class="auth-btn-secondary" id="auth-back-signin-btn">Return to Sign In</button>
+        </div>
+      </div>
+    `;
+  }
+
+  getForgotPasswordModalHtml() {
+    return `
+      <div class="auth-modal-header">
+        <div class="auth-modal-badge">
+          <span style="font-weight: 800;">&lt;/&gt;</span> Recovery
+        </div>
+        <h2 class="auth-modal-title" id="auth-modal-title">Reset Your Password</h2>
+        <p class="auth-modal-subtitle">Enter your email and we'll send you a recovery link.</p>
+      </div>
+
+      ${this.generalSuccess ? `
+        <div class="auth-success-box">
+          <div class="auth-success-banner" role="status">
+            <span>✓</span>
+            <span>${escapeHtml(this.generalSuccess)}</span>
+          </div>
+          <p class="auth-status-description" style="margin-top: 10px;">
+            Check your email inbox for instructions. If you don't see it, be sure to check your spam folder.
+          </p>
+          <button type="button" class="auth-btn-secondary" id="auth-back-signin-btn" style="width: 100%; margin-top: 12px;">
+            Back to Sign In
+          </button>
+        </div>
+      ` : `
+        ${this.generalError ? `
+          <div class="auth-error-banner" role="alert">
+            <span>⚠️</span>
+            <span>${escapeHtml(this.generalError)}</span>
+          </div>
+        ` : ''}
+
+        <form class="auth-form" id="auth-forgot-form" novalidate>
+          <div class="auth-field">
+            <label class="auth-label" for="auth-forgot-email">Email address</label>
+            <input
+              type="email"
+              class="auth-input ${this.fieldErrors.email ? 'has-error' : ''}"
+              id="auth-forgot-email"
+              name="email"
+              autocomplete="email"
+              placeholder="name@example.com"
+              required
+            />
+            ${this.fieldErrors.email ? `<p class="auth-field-error" role="alert">${escapeHtml(this.fieldErrors.email)}</p>` : ''}
+          </div>
+
+          <button type="submit" class="auth-submit-btn" id="auth-forgot-submit" ${this.isLoading ? 'disabled' : ''}>
+            ${this.isLoading ? `<span class="auth-spinner-sm" aria-hidden="true"></span><span>Sending reset link...</span>` : `<span>Send Reset Link</span>`}
+          </button>
+        </form>
+
+        <div class="auth-modal-footer">
+          <button type="button" class="auth-link-btn" id="auth-back-signin-link">← Back to Sign In</button>
+        </div>
+      `}
+    `;
+  }
+
+  getResetPasswordModalHtml() {
+    return `
+      <div class="auth-modal-header">
+        <div class="auth-modal-badge">
+          <span style="font-weight: 800;">&lt;/&gt;</span> Security
+        </div>
+        <h2 class="auth-modal-title" id="auth-modal-title">Create New Password</h2>
+        <p class="auth-modal-subtitle">Enter your new secure password below.</p>
+      </div>
+
+      ${this.generalSuccess ? `
+        <div class="auth-status-container">
+          <div class="auth-status-icon-box check">
+            ${CHECK_CIRCLE_SVG}
+          </div>
+          <div class="auth-success-banner" role="status">
+            <span>✓</span>
+            <span>${escapeHtml(this.generalSuccess)}</span>
+          </div>
+          <p class="auth-status-description" style="margin-top: 10px;">
+            You can now continue learning with your new password.
+          </p>
+          <button type="button" class="auth-submit-btn" id="auth-finish-reset-btn" style="margin-top: 14px;">
+            Continue to App
+          </button>
+        </div>
+      ` : `
+        ${this.generalError ? `
+          <div class="auth-error-banner" role="alert">
+            <span>⚠️</span>
+            <span>${escapeHtml(this.generalError)}</span>
+          </div>
+        ` : ''}
+
+        <form class="auth-form" id="auth-reset-form" novalidate>
+          <div class="auth-field">
+            <label class="auth-label" for="auth-new-password">New Password</label>
+            <div class="auth-input-wrapper">
+              <input
+                type="password"
+                class="auth-input ${this.fieldErrors.newPassword ? 'has-error' : ''}"
+                id="auth-new-password"
+                name="newPassword"
+                autocomplete="new-password"
+                placeholder="At least 8 characters"
+                required
+              />
+              <button type="button" class="auth-pw-toggle" data-target="auth-new-password" aria-label="Show password" aria-pressed="false">
+                ${EYE_ICON_SVG}
+              </button>
+            </div>
+            <p class="auth-field-hint">Must be at least 8 characters long.</p>
+            ${this.fieldErrors.newPassword ? `<p class="auth-field-error" role="alert">${escapeHtml(this.fieldErrors.newPassword)}</p>` : ''}
+          </div>
+
+          <div class="auth-field">
+            <label class="auth-label" for="auth-confirm-new-password">Confirm New Password</label>
+            <div class="auth-input-wrapper">
+              <input
+                type="password"
+                class="auth-input ${this.fieldErrors.confirmNewPassword ? 'has-error' : ''}"
+                id="auth-confirm-new-password"
+                name="confirmNewPassword"
+                autocomplete="new-password"
+                placeholder="Re-enter new password"
+                required
+              />
+              <button type="button" class="auth-pw-toggle" data-target="auth-confirm-new-password" aria-label="Show password" aria-pressed="false">
+                ${EYE_ICON_SVG}
+              </button>
+            </div>
+            ${this.fieldErrors.confirmNewPassword ? `<p class="auth-field-error" role="alert">${escapeHtml(this.fieldErrors.confirmNewPassword)}</p>` : ''}
+          </div>
+
+          <button type="submit" class="auth-submit-btn" id="auth-reset-submit" ${this.isLoading ? 'disabled' : ''}>
+            ${this.isLoading ? `<span class="auth-spinner-sm" aria-hidden="true"></span><span>Updating password...</span>` : `<span>Update Password</span>`}
+          </button>
+        </form>
+      `}
+    `;
+  }
+
+  bindModalEvents(modalRoot) {
     const closeBtn = modalRoot.querySelector('#auth-modal-close-btn');
-    const cancelBtn = modalRoot.querySelector('#auth-modal-cancel-btn');
-    const googleBtn = modalRoot.querySelector('#auth-google-btn');
     const backdrop = modalRoot.querySelector('#auth-modal-backdrop');
 
     if (closeBtn) closeBtn.addEventListener('click', () => this.closeModal());
-    if (cancelBtn) cancelBtn.addEventListener('click', () => this.closeModal());
     if (backdrop) {
       backdrop.addEventListener('click', (e) => {
         if (e.target === backdrop) this.closeModal();
       });
     }
 
+    // Tab key focus trap
     modalRoot.addEventListener('keydown', (e) => {
       if (e.key === 'Tab') {
-        const focusables = Array.from(modalRoot.querySelectorAll('button:not([disabled])'));
+        const focusables = Array.from(modalRoot.querySelectorAll('button:not([disabled]), input:not([disabled]), a[href]'));
         if (focusables.length === 0) return;
         const first = focusables[0];
         const last = focusables[focusables.length - 1];
@@ -343,28 +766,312 @@ class AuthUI {
       }
     });
 
-    if (googleBtn) {
-      googleBtn.addEventListener('click', async () => {
-        await this.handleGoogleSignIn();
+    // Password visibility toggles
+    modalRoot.querySelectorAll('.auth-pw-toggle').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const targetId = btn.getAttribute('data-target');
+        const input = modalRoot.querySelector(`#${targetId}`);
+        if (!input) return;
+
+        const isPassword = input.type === 'password';
+        input.type = isPassword ? 'text' : 'password';
+        btn.setAttribute('aria-label', isPassword ? 'Hide password' : 'Show password');
+        btn.setAttribute('aria-pressed', String(isPassword));
+        btn.innerHTML = isPassword ? EYE_OFF_ICON_SVG : EYE_ICON_SVG;
       });
-      // Initial focus on Google button
-      setTimeout(() => googleBtn.focus(), 50);
+    });
+
+    // State navigation buttons
+    const gotoSignup = modalRoot.querySelector('#auth-goto-signup');
+    if (gotoSignup) gotoSignup.addEventListener('click', () => this.openModal('signup'));
+
+    const gotoSignin = modalRoot.querySelector('#auth-goto-signin');
+    if (gotoSignin) gotoSignin.addEventListener('click', () => this.openModal('signin'));
+
+    const gotoForgot = modalRoot.querySelector('#auth-goto-forgot');
+    if (gotoForgot) gotoForgot.addEventListener('click', () => this.openModal('forgot'));
+
+    const backSigninLink = modalRoot.querySelector('#auth-back-signin-link');
+    if (backSigninLink) backSigninLink.addEventListener('click', () => this.openModal('signin'));
+
+    const backSigninBtn = modalRoot.querySelector('#auth-back-signin-btn');
+    if (backSigninBtn) backSigninBtn.addEventListener('click', () => this.openModal('signin'));
+
+    const finishResetBtn = modalRoot.querySelector('#auth-finish-reset-btn');
+    if (finishResetBtn) finishResetBtn.addEventListener('click', () => this.closeModal());
+
+    const resendBtn = modalRoot.querySelector('#auth-resend-btn');
+    if (resendBtn) {
+      resendBtn.addEventListener('click', async () => {
+        await this.handleResendVerification();
+      });
+    }
+
+    // Form Submissions
+    const signinForm = modalRoot.querySelector('#auth-signin-form');
+    if (signinForm) {
+      signinForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        await this.handleSignInSubmit(signinForm);
+      });
+      // Initial focus on first input
+      setTimeout(() => {
+        const firstInput = signinForm.querySelector('input');
+        if (firstInput) firstInput.focus();
+      }, 50);
+    }
+
+    const signupForm = modalRoot.querySelector('#auth-signup-form');
+    if (signupForm) {
+      signupForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        await this.handleSignUpSubmit(signupForm);
+      });
+      setTimeout(() => {
+        const firstInput = signupForm.querySelector('input');
+        if (firstInput) firstInput.focus();
+      }, 50);
+    }
+
+    const forgotForm = modalRoot.querySelector('#auth-forgot-form');
+    if (forgotForm) {
+      forgotForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        await this.handleForgotSubmit(forgotForm);
+      });
+      setTimeout(() => {
+        const firstInput = forgotForm.querySelector('input');
+        if (firstInput) firstInput.focus();
+      }, 50);
+    }
+
+    const resetForm = modalRoot.querySelector('#auth-reset-form');
+    if (resetForm) {
+      resetForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        await this.handleResetSubmit(resetForm);
+      });
+      setTimeout(() => {
+        const firstInput = resetForm.querySelector('input');
+        if (firstInput) firstInput.focus();
+      }, 50);
     }
   }
 
-  async handleGoogleSignIn() {
-    if (this.isSigningIn) return;
-    this.isSigningIn = true;
-    this.errorMessage = null;
+  isValidEmail(email) {
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(email).trim());
+  }
+
+  async handleSignInSubmit(form) {
+    if (this.isLoading) return;
+
+    this.fieldErrors = {};
+    this.generalError = null;
+
+    const email = form.email.value.trim();
+    const password = form.password.value;
+
+    // Validation
+    if (!email) {
+      this.fieldErrors.email = 'Please enter your email.';
+    } else if (!this.isValidEmail(email)) {
+      this.fieldErrors.email = 'Please enter a valid email address.';
+    }
+
+    if (!password) {
+      this.fieldErrors.password = 'Please enter your password.';
+    }
+
+    if (Object.keys(this.fieldErrors).length > 0) {
+      this.renderModal();
+      return;
+    }
+
+    this.isLoading = true;
     this.renderModal();
 
-    const { error } = await signInWithGoogle();
+    const { data, error } = await signIn({ email, password });
+    this.isLoading = false;
+
     if (error) {
-      this.isSigningIn = false;
-      this.errorMessage = 'Unable to sign in with Google. Please try again.';
+      this.generalError = getFriendlyErrorMessage(error);
+      this.renderModal();
+      return;
+    }
+
+    this.currentUser = data?.user || null;
+    this.syncUserProfileWithPractice();
+    this.closeModal();
+    this.render();
+  }
+
+  async handleSignUpSubmit(form) {
+    if (this.isLoading) return;
+
+    this.fieldErrors = {};
+    this.generalError = null;
+
+    const fullName = form.fullName.value.trim();
+    const email = form.email.value.trim();
+    const password = form.password.value;
+    const confirmPassword = form.confirmPassword.value;
+
+    // Validation
+    if (!fullName) {
+      this.fieldErrors.fullName = 'Please enter your name.';
+    } else if (fullName.length < 2) {
+      this.fieldErrors.fullName = 'Name must be at least 2 characters.';
+    }
+
+    if (!email) {
+      this.fieldErrors.email = 'Please enter your email.';
+    } else if (!this.isValidEmail(email)) {
+      this.fieldErrors.email = 'Please enter a valid email address.';
+    }
+
+    if (!password) {
+      this.fieldErrors.password = 'Please enter a password.';
+    } else if (password.length < 8) {
+      this.fieldErrors.password = 'Password must be at least 8 characters.';
+    }
+
+    if (!confirmPassword) {
+      this.fieldErrors.confirmPassword = 'Please confirm your password.';
+    } else if (password !== confirmPassword) {
+      this.fieldErrors.confirmPassword = 'Passwords do not match.';
+    }
+
+    if (Object.keys(this.fieldErrors).length > 0) {
+      this.renderModal();
+      return;
+    }
+
+    this.isLoading = true;
+    this.renderModal();
+
+    const { data, error } = await signUp({ fullName, email, password });
+    this.isLoading = false;
+
+    if (error) {
+      this.generalError = getFriendlyErrorMessage(error);
+      this.renderModal();
+      return;
+    }
+
+    // Check if Supabase requires email verification (session is null or user has confirmation pending)
+    this.pendingEmail = email;
+
+    if (data?.session) {
+      // Auto-confirmed by Supabase project configuration
+      this.currentUser = data.user;
+      this.syncUserProfileWithPractice();
+      this.closeModal();
+      this.render();
+    } else {
+      // Email confirmation pending state
+      this.modalMode = 'verification-pending';
+      this.generalSuccess = null;
+      this.generalError = null;
       this.renderModal();
     }
-    // If successful, Supabase redirects the browser to the Google OAuth page.
+  }
+
+  async handleResendVerification() {
+    if (this.isResending || !this.pendingEmail) return;
+
+    this.isResending = true;
+    this.generalError = null;
+    this.generalSuccess = null;
+    this.renderModal();
+
+    const { error } = await resendVerificationEmail(this.pendingEmail);
+    this.isResending = false;
+
+    if (error) {
+      this.generalError = getFriendlyErrorMessage(error);
+    } else {
+      this.generalSuccess = 'A new verification email has been sent!';
+    }
+
+    this.renderModal();
+  }
+
+  async handleForgotSubmit(form) {
+    if (this.isLoading) return;
+
+    this.fieldErrors = {};
+    this.generalError = null;
+
+    const email = form.email.value.trim();
+
+    if (!email) {
+      this.fieldErrors.email = 'Please enter your email address.';
+    } else if (!this.isValidEmail(email)) {
+      this.fieldErrors.email = 'Please enter a valid email address.';
+    }
+
+    if (Object.keys(this.fieldErrors).length > 0) {
+      this.renderModal();
+      return;
+    }
+
+    this.isLoading = true;
+    this.renderModal();
+
+    const { error } = await forgotPassword(email);
+    this.isLoading = false;
+
+    if (error) {
+      this.generalError = getFriendlyErrorMessage(error);
+      this.renderModal();
+      return;
+    }
+
+    // Never reveal whether an email exists; always show success
+    this.generalSuccess = 'Password reset instructions have been sent to your email.';
+    this.renderModal();
+  }
+
+  async handleResetSubmit(form) {
+    if (this.isLoading) return;
+
+    this.fieldErrors = {};
+    this.generalError = null;
+
+    const newPassword = form.newPassword.value;
+    const confirmNewPassword = form.confirmNewPassword.value;
+
+    if (!newPassword) {
+      this.fieldErrors.newPassword = 'Please enter a new password.';
+    } else if (newPassword.length < 8) {
+      this.fieldErrors.newPassword = 'Password must be at least 8 characters.';
+    }
+
+    if (!confirmNewPassword) {
+      this.fieldErrors.confirmNewPassword = 'Please confirm your new password.';
+    } else if (newPassword !== confirmNewPassword) {
+      this.fieldErrors.confirmNewPassword = 'Passwords do not match.';
+    }
+
+    if (Object.keys(this.fieldErrors).length > 0) {
+      this.renderModal();
+      return;
+    }
+
+    this.isLoading = true;
+    this.renderModal();
+
+    const { error } = await resetPassword(newPassword);
+    this.isLoading = false;
+
+    if (error) {
+      this.generalError = getFriendlyErrorMessage(error);
+      this.renderModal();
+      return;
+    }
+
+    this.generalSuccess = 'Your password has been updated successfully.';
+    this.renderModal();
   }
 
   async handleSignOut() {
@@ -377,7 +1084,7 @@ class AuthUI {
     this.isDropdownOpen = false;
 
     if (error) {
-      alert('Something went wrong while signing out. Please try again.');
+      console.error('[AuthUI] Sign out error:', error.message);
     }
 
     this.currentUser = null;
@@ -392,7 +1099,7 @@ class AuthUI {
 
   handleKeyDown(e) {
     if (e.key === 'Escape') {
-      if (this.isModalOpen) {
+      if (this.isModalOpen && !this.isLoading) {
         this.closeModal();
       } else if (this.isDropdownOpen) {
         this.closeDropdown();
@@ -403,6 +1110,10 @@ class AuthUI {
 
 // Instantiate and initialize on DOMContentLoaded in browser environment
 const authUI = new AuthUI();
+
+if (typeof window !== 'undefined') {
+  window.authUI = authUI;
+}
 
 if (typeof document !== 'undefined') {
   if (document.readyState === 'loading') {

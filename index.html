@@ -2324,8 +2324,8 @@ window.addEventListener('resize',()=>fitFrame());
 
 /* ---------- start ---------- */
 const rawHash=(location.hash||'').slice(1);
-const isAuthHash=rawHash.startsWith('access_token=')||rawHash.includes('&access_token=')||rawHash.startsWith('error=')||rawHash.startsWith('error_description=')||rawHash.startsWith('refresh_token=');
-const isAuthQuery=location.search.includes('code=')||location.search.includes('error=');
+const isAuthHash=rawHash.startsWith('access_token=')||rawHash.includes('&access_token=')||rawHash.includes('type=recovery')||rawHash.includes('type=signup')||rawHash.startsWith('error=')||rawHash.startsWith('error_description=')||rawHash.startsWith('refresh_token=');
+const isAuthQuery=location.search.includes('code=')||location.search.includes('error=')||location.search.includes('type=recovery');
 const isAuthRedirect=isAuthHash||isAuthQuery;
 const start=isAuthRedirect?'navbar':rawHash;
 renderTopics('');
