@@ -214,6 +214,66 @@ The UI relies on standard CSS custom properties defined in [`index.html`](file:/
 
 ---
 
+## 🚀 Deploying to Vercel (Recommended)
+
+This project is pre-configured and optimized for **zero-configuration, high-performance deployment on Vercel**.
+
+### Option A: Deploy via Vercel Dashboard (Fastest)
+
+1. Push your changes to GitHub:
+   ```bash
+   git add .
+   git commit -m "Optimize for Vercel deployment"
+   git push origin main
+   ```
+2. Go to [vercel.com](https://vercel.com) and log in.
+3. Click **Add New...** → **Project**.
+4. Import your `HTML_CSS_Learning` repository.
+5. In the project settings:
+   - **Framework Preset**: *Other* (detected automatically)
+   - **Root Directory**: `./` (default)
+   - **Build Command**: `npm run build` (detected automatically)
+   - **Output Directory**: `.` (default static root)
+6. *(Optional)* If using custom Supabase credentials, add them under **Environment Variables**:
+   - `NEXT_PUBLIC_SUPABASE_URL` or `SUPABASE_URL`
+   - `NEXT_PUBLIC_SUPABASE_ANON_KEY` or `SUPABASE_ANON_KEY`
+7. Click **Deploy**. Your site will be live on a `*.vercel.app` domain in seconds!
+
+### Option B: Deploy via Vercel CLI
+
+```bash
+# Install Vercel CLI globally (if not already installed)
+npm i -g vercel
+
+# Deploy preview
+vercel
+
+# Deploy to production
+vercel --prod
+```
+
+### ⚡ Vercel Optimizations Included:
+- **`vercel.json`**:
+  - Global security headers (`X-Content-Type-Options: nosniff`, `X-Frame-Options: SAMEORIGIN`, `Referrer-Policy`, `Permissions-Policy`).
+  - Cache-Control headers for atomic HTML revalidation and cached JS/CSS assets.
+  - SPA & deep-link rewrites (`/auth/callback`, `/xray`, `/practice`) back to `index.html`.
+- **`.vercelignore`**: Excludes database migrations, docs, and development artifacts from upload bundles.
+- **PWA & Manifest**: `site.webmanifest` and `favicon.svg` for crisp home-screen icons and rich social share cards.
+- **Custom 404 Experience**: Dedicated, theme-aware [`404.html`](file:///f:/MIT%20VishwaPrayag%20University/3%20-%20Semester/Full%20Stack%20Development%20JS%20Intergration%20And%20Backend/HTML%20CSS%20Learning/404.html) matching the Tag Finder styling.
+
+### ⚠️ Supabase Authentication Callback Configuration
+
+To ensure Email confirmation, password reset links, and magic links work seamlessly on your live Vercel domain:
+1. Open your [Supabase Dashboard](https://supabase.com/dashboard).
+2. Navigate to **Authentication** → **URL Configuration**.
+3. Under **Site URL**, set:
+   `https://<your-project-name>.vercel.app`
+4. Under **Redirect URLs**, click **Add URI** and add:
+   `https://<your-project-name>.vercel.app/**`
+5. Click **Save**.
+
+---
+
 ## 🌐 Deploying to GitHub Pages
 
 1. Commit and push your latest changes to the `main` branch:

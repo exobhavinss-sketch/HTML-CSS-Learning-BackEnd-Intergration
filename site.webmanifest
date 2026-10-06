@@ -1,0 +1,16 @@
+{
+  "name": "HTML & CSS Tag Finder",
+  "short_name": "Tag Finder",
+  "description": "Interactive HTML5 & CSS3 learning workbench, practice challenges, and live web inspector.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0b1118",
+  "theme_color": "#1f5fbf",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    }
+  ]
+}

@@ -6,6 +6,8 @@
   "scripts": {
     "dev": "npx serve -l 3000 .",
     "start": "npx serve -l 3000 .",
+    "build": "node -e \"console.log('Project is static and ready for Vercel deployment')\"",
+    "vercel-build": "node -e \"console.log('Vercel build ready')\"",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "repository": {

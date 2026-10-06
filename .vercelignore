@@ -1,0 +1,10 @@
+.git
+.gitignore
+.agents
+.gemini
+.playwright-mcp
+node_modules
+supabase
+docs
+package-lock.json
+*.log
